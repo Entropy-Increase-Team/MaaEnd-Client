@@ -188,3 +188,8 @@ func (a *MaaWrapperAdapter) StopTask() error {
 func (a *MaaWrapperAdapter) TakeScreenshot() ([]byte, int, int, error) {
 	return a.wrapper.TakeScreenshot()
 }
+
+// ClearEventChannels 清除事件通道引用
+func (a *MaaWrapperAdapter) ClearEventChannels() {
+	a.wrapper.ClearEventChannels()
+}

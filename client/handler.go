@@ -183,6 +183,9 @@ func (c *Client) executeTask(job *Job) {
 	// 执行任务
 	err := c.maaWrapper.RunTask(job, statusCh, logCh)
 
+	// 先清除 eventHandler 中的通道引用，防止回调继续写入
+	c.maaWrapper.ClearEventChannels()
+
 	// 关闭通道
 	close(statusCh)
 	close(logCh)
@@ -251,6 +254,7 @@ func (c *Client) handleRequestScreenshot(msg *Message) {
 
 	if c.maaWrapper == nil {
 		log.Printf("[Client] MaaWrapper 未初始化，无法截图")
+		c.SendScreenshot(payload.RequestID, "", 0, 0, "MaaFramework 未初始化")
 		return
 	}
 

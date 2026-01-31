@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	maafw "github.com/MaaXYZ/maa-framework-go/v3"
@@ -192,6 +193,14 @@ func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.C
 		return nil, fmt.Errorf("Win32 配置缺失")
 	}
 
+	// 打印控制器配置详情
+	log.Printf("[Maa] Win32 控制器配置:")
+	log.Printf("[Maa]   class_regex: %s", config.Win32.ClassRegex)
+	log.Printf("[Maa]   window_regex: %s", config.Win32.WindowRegex)
+	log.Printf("[Maa]   screencap: %s", config.Win32.Screencap)
+	log.Printf("[Maa]   mouse: %s", config.Win32.Mouse)
+	log.Printf("[Maa]   keyboard: %s", config.Win32.Keyboard)
+
 	// 查找窗口
 	windows := maafw.FindDesktopWindows()
 	if len(windows) == 0 {
@@ -203,6 +212,8 @@ func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.C
 	for _, win := range windows {
 		if matchWindow(win, config.Win32.ClassRegex, config.Win32.WindowRegex) {
 			targetWindow = win
+			log.Printf("[Maa] 匹配到窗口: handle=%v, class=%s, name=%s",
+				win.Handle, win.ClassName, win.WindowName)
 			break
 		}
 	}
@@ -216,6 +227,9 @@ func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.C
 	screencapMethod := parseScreencapMethod(config.Win32.Screencap)
 	mouseMethod := parseInputMethod(config.Win32.Mouse)
 	keyboardMethod := parseInputMethod(config.Win32.Keyboard)
+
+	log.Printf("[Maa] 解析后的方法: screencap=%v, mouse=%v, keyboard=%v",
+		screencapMethod, mouseMethod, keyboardMethod)
 
 	// 创建控制器
 	ctrl := maafw.NewWin32Controller(
@@ -362,14 +376,14 @@ func (w *Wrapper) RunTask(job *client.Job, statusCh chan<- client.TaskStatusPayl
 
 		log.Printf("[Maa] 执行任务 [%d/%d]: %s", i+1, total, taskItem.Name)
 
-		// 发送状态
-		statusCh <- client.TaskStatusPayload{
+		// 发送状态（使用安全方法防止 channel 已关闭）
+		w.eventHandler.SendStatus(client.TaskStatusPayload{
 			JobID:       job.JobID,
 			Status:      "running",
 			CurrentTask: taskItem.Name,
 			Progress:    client.JobProgress{Completed: i, Total: total},
 			Message:     fmt.Sprintf("正在执行: %s", taskConfig.Label),
-		}
+		})
 
 		// 解析选项
 		override, err := resolver.ResolveTaskOptions(taskItem.Name, taskItem.Options)
@@ -405,6 +419,13 @@ func (w *Wrapper) StopTask() error {
 	return nil
 }
 
+// ClearEventChannels 清除事件通道引用（在关闭通道前调用，防止 panic）
+func (w *Wrapper) ClearEventChannels() {
+	if w.eventHandler != nil {
+		w.eventHandler.ClearChannels()
+	}
+}
+
 // TakeScreenshot 截图
 func (w *Wrapper) TakeScreenshot() ([]byte, int, int, error) {
 	if w.controller == nil {
@@ -433,6 +454,11 @@ func (w *Wrapper) startAgent() error {
 	agentExec := w.pi.GetAgentExec()
 	if agentExec == "" {
 		return nil
+	}
+
+	// 检查 Agent 可执行文件是否存在
+	if _, err := os.Stat(agentExec); os.IsNotExist(err) {
+		return fmt.Errorf("Agent 服务文件不存在: %s (部分功能如自定义识别器将不可用)", agentExec)
 	}
 
 	if w.agentServer == nil {
@@ -476,17 +502,38 @@ func (w *Wrapper) GetProjectInterface() *core.ProjectInterface {
 	return w.pi
 }
 
-// matchWindow 匹配窗口
+// matchWindow 使用正则表达式匹配窗口
 func matchWindow(win *maafw.DesktopWindow, classRegex, windowRegex string) bool {
-	// 简单字符串包含匹配
+	// 匹配 class 名称
 	if classRegex != "" {
-		if win.ClassName == "" || !containsPattern(win.ClassName, classRegex) {
+		if win.ClassName == "" {
+			return false
+		}
+		matched, err := regexp.MatchString(classRegex, win.ClassName)
+		if err != nil {
+			// 正则表达式语法错误，回退到包含匹配
+			log.Printf("[Maa] class_regex 语法错误 '%s': %v, 回退到包含匹配", classRegex, err)
+			if !containsString(win.ClassName, classRegex) {
+				return false
+			}
+		} else if !matched {
 			return false
 		}
 	}
 
+	// 匹配窗口名称
 	if windowRegex != "" {
-		if win.WindowName == "" || !containsPattern(win.WindowName, windowRegex) {
+		if win.WindowName == "" {
+			return false
+		}
+		matched, err := regexp.MatchString(windowRegex, win.WindowName)
+		if err != nil {
+			// 正则表达式语法错误，回退到包含匹配
+			log.Printf("[Maa] window_regex 语法错误 '%s': %v, 回退到包含匹配", windowRegex, err)
+			if !containsString(win.WindowName, windowRegex) {
+				return false
+			}
+		} else if !matched {
 			return false
 		}
 	}
@@ -494,14 +541,9 @@ func matchWindow(win *maafw.DesktopWindow, classRegex, windowRegex string) bool 
 	return true
 }
 
-// containsPattern 简单模式匹配
-func containsPattern(s, pattern string) bool {
-	// 简单实现：检查是否包含
-	return len(s) > 0 && len(pattern) > 0 && (s == pattern || contains(s, pattern))
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || findSubstring(s, substr))
+// containsString 检查字符串是否包含子串（用于正则表达式语法错误时的回退）
+func containsString(s, substr string) bool {
+	return len(s) >= len(substr) && findSubstring(s, substr)
 }
 
 func findSubstring(s, substr string) bool {
@@ -514,19 +556,76 @@ func findSubstring(s, substr string) bool {
 }
 
 // parseScreencapMethod 解析截图方法
+// 支持的方法（来自 maa-framework-go/v3/controller/win32）：
+//   - ScreencapGDI (1)
+//   - ScreencapFramePool (2)
+//   - ScreencapDXGIDesktopDup (4)
+//   - ScreencapDXGIDesktopDupWindow (8)
+//   - ScreencapPrintWindow (16)
+//   - ScreencapScreenDC (32)
 func parseScreencapMethod(method string) win32.ScreencapMethod {
+	// 首先尝试使用官方解析
 	m, err := win32.ParseScreencapMethod(method)
-	if err != nil {
-		return win32.ScreencapGDI
+	if err == nil {
+		return m
 	}
-	return m
+
+	// 手动映射常见的截图方法（与 interface.json 中的命名一致）
+	switch method {
+	case "GDI":
+		return win32.ScreencapGDI
+	case "FramePool":
+		return win32.ScreencapFramePool
+	case "DXGI_DesktopDup":
+		return win32.ScreencapDXGIDesktopDup
+	case "DXGI_DesktopDup_Window":
+		return win32.ScreencapDXGIDesktopDupWindow
+	case "PrintWindow":
+		return win32.ScreencapPrintWindow
+	case "ScreenDC":
+		return win32.ScreencapScreenDC
+	default:
+		log.Printf("[Maa] 未知截图方法 '%s', 使用默认 FramePool", method)
+		return win32.ScreencapFramePool
+	}
 }
 
 // parseInputMethod 解析输入方法
+// 支持的方法（来自 maa-framework-go/v3/controller/win32）：
+//   - InputSeize (1) - 前台模式，独占输入
+//   - InputSendMessage (2)
+//   - InputPostMessage (4)
+//   - InputLegacyEvent (8)
+//   - InputPostThreadMessage (16)
+//   - InputSendMessageWithCursorPos (32) - 带光标位置的 SendMessage
+//   - InputPostMessageWithCursorPos (64)
+//   - InputSendMessageWithCursorPosAndBlockInput (128)
+//   - InputPostMessageWithCursorPosAndBlockInput (256)
 func parseInputMethod(method string) win32.InputMethod {
+	// 首先尝试使用官方解析
 	m, err := win32.ParseInputMethod(method)
-	if err != nil {
+	if err == nil {
+		return m
+	}
+
+	// 手动映射常见的输入方法（与 interface.json 中的命名一致）
+	switch method {
+	case "Seize":
+		return win32.InputSeize
+	case "SendMessage":
+		return win32.InputSendMessage
+	case "PostMessage":
+		return win32.InputPostMessage
+	case "SendMessageWithCursorPos":
+		return win32.InputSendMessageWithCursorPos
+	case "PostMessageWithCursorPos":
+		return win32.InputPostMessageWithCursorPos
+	case "SendMessageWithCursorPosAndBlockInput":
+		return win32.InputSendMessageWithCursorPosAndBlockInput
+	case "PostMessageWithCursorPosAndBlockInput":
+		return win32.InputPostMessageWithCursorPosAndBlockInput
+	default:
+		log.Printf("[Maa] 未知输入方法 '%s', 使用默认 SendMessage", method)
 		return win32.InputSendMessage
 	}
-	return m
 }

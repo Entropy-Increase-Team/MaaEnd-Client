@@ -62,6 +62,7 @@ type MaaWrapperInterface interface {
 	RunTask(job *Job, statusCh chan<- TaskStatusPayload, logCh chan<- TaskLogPayload) error
 	StopTask() error
 	TakeScreenshot() ([]byte, int, int, error)
+	ClearEventChannels() // 清除事件通道引用，防止关闭后写入导致 panic
 }
 
 // NewClient 创建客户端
