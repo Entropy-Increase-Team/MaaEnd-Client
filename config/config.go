@@ -56,7 +56,7 @@ func Load(configPath string) (*Config, error) {
 	v := viper.New()
 
 	// 设置默认值
-	v.SetDefault("version", "0.2.0")
+	v.SetDefault("version", "0.2.1")
 	v.SetDefault("server.ws_url", "ws://localhost:15618/ws/maaend")
 	v.SetDefault("server.connect_timeout", "10s")
 	v.SetDefault("server.heartbeat_interval", "30s")
@@ -87,7 +87,7 @@ func Load(configPath string) (*Config, error) {
 
 	// 确保版本号有值
 	if cfg.Version == "" {
-		cfg.Version = "0.2.0"
+		cfg.Version = "0.2.1"
 	}
 
 	// 自动检测 MaaEnd 路径

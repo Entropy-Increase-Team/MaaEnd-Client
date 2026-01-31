@@ -93,7 +93,7 @@ MaaEnd Client 是 MaaEnd 终末地小助手的远程控制客户端，允许用�
 # MaaEnd Client 配置文件
 
 # 客户端版本号
-version: "0.2.0"
+version: "0.2.1"
 
 server:
   # 云端 WebSocket 地址
