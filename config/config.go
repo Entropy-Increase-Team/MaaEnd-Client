@@ -29,7 +29,9 @@ type ServerConfig struct {
 
 // MaaEndConfig MaaEnd 配置
 type MaaEndConfig struct {
-	Path string `mapstructure:"path"`
+	Path             string `mapstructure:"path"`
+	Win32ClassRegex  string `mapstructure:"win32_class_regex"`
+	Win32WindowRegex string `mapstructure:"win32_window_regex"`
 }
 
 // DeviceConfig 设备配置
@@ -56,6 +58,8 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("server.heartbeat_interval", "30s")
 	v.SetDefault("server.reconnect_max_delay", "30s")
 	v.SetDefault("maaend.path", "")
+	v.SetDefault("maaend.win32_class_regex", "")
+	v.SetDefault("maaend.win32_window_regex", "")
 	v.SetDefault("device.name", "")
 	v.SetDefault("device.token", "")
 	v.SetDefault("logging.level", "info")

@@ -59,12 +59,12 @@ func (h *EventHandler) OnTaskerTask(event maafw.EventStatus, detail maafw.Tasker
 	}
 
 	if message != "" {
-		logCh <- client.TaskLogPayload{
+		safeSendLog(logCh, client.TaskLogPayload{
 			JobID:     jobID,
 			Level:     level,
 			Message:   message,
 			EventType: "task",
-		}
+		})
 	}
 }
 
@@ -93,14 +93,23 @@ func (h *EventHandler) OnNodePipelineNode(event maafw.EventStatus, detail maafw.
 	}
 
 	if message != "" {
-		logCh <- client.TaskLogPayload{
+		safeSendLog(logCh, client.TaskLogPayload{
 			JobID:     jobID,
 			Level:     level,
 			Message:   message,
 			NodeName:  detail.Name,
 			EventType: "node",
-		}
+		})
 	}
+}
+
+func safeSendLog(ch chan<- client.TaskLogPayload, payload client.TaskLogPayload) {
+	defer func() {
+		if recover() != nil {
+			// 通道可能已关闭，忽略并防止崩溃
+		}
+	}()
+	ch <- payload
 }
 
 // formatValue 格式化值

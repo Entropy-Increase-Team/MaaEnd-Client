@@ -357,12 +357,13 @@ func (c *Client) SendTaskCompleted(payload *TaskCompletedPayload) {
 }
 
 // SendScreenshot 发送截图
-func (c *Client) SendScreenshot(requestID, base64Image string, width, height int) {
+func (c *Client) SendScreenshot(requestID, base64Image string, width, height int, errMsg string) {
 	c.SendMessage(MsgTypeScreenshot, &ScreenshotPayload{
 		RequestID:   requestID,
 		Base64Image: base64Image,
 		Width:       width,
 		Height:      height,
+		Error:       errMsg,
 	})
 }
 

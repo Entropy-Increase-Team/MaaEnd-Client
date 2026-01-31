@@ -13,6 +13,7 @@ import (
 	"github.com/MaaXYZ/maa-framework-go/v3/controller/win32"
 
 	"maaend-client/client"
+	"maaend-client/config"
 	"maaend-client/core"
 )
 
@@ -67,6 +68,9 @@ func (w *Wrapper) Init() error {
 	if err != nil {
 		return fmt.Errorf("加载 interface.json 失败: %w", err)
 	}
+	if cfg := config.Get(); cfg != nil {
+		applyWin32Overrides(pi, cfg.MaaEnd.Win32ClassRegex, cfg.MaaEnd.Win32WindowRegex)
+	}
 	w.pi = pi
 	log.Printf("[Maa] 加载项目: %s v%s", pi.Name, pi.Version)
 
@@ -89,6 +93,28 @@ func (w *Wrapper) Init() error {
 	log.Printf("[Maa] MaaFramework 初始化完成")
 
 	return nil
+}
+
+func applyWin32Overrides(pi *core.ProjectInterface, classRegex, windowRegex string) {
+	if pi == nil {
+		return
+	}
+	if classRegex == "" && windowRegex == "" {
+		return
+	}
+	for i := range pi.Controllers {
+		ctrl := &pi.Controllers[i]
+		if ctrl.Win32 == nil {
+			continue
+		}
+		if classRegex != "" {
+			ctrl.Win32.ClassRegex = classRegex
+		}
+		if windowRegex != "" {
+			ctrl.Win32.WindowRegex = windowRegex
+		}
+	}
+	log.Printf("[Maa] 已覆盖 Win32 窗口匹配规则: class=%q, window=%q", classRegex, windowRegex)
 }
 
 // GetCapabilities 获取设备能力

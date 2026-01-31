@@ -13,6 +13,10 @@ server:
 maaend:
   # MaaEnd 安装目录（为空则自动检测）
   path: ""
+  # 覆盖 Win32 窗口类名（正则，留空不覆盖）
+  win32_class_regex: ""
+  # 覆盖 Win32 窗口标题（正则，留空不覆盖）
+  win32_window_regex: ""
 
 device:
   # 设备名称（为空则使用主机名）

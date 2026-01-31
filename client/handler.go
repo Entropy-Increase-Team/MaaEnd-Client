@@ -259,6 +259,7 @@ func (c *Client) handleRequestScreenshot(msg *Message) {
 		imageData, width, height, err := c.maaWrapper.TakeScreenshot()
 		if err != nil {
 			log.Printf("[Client] 截图失败: %v", err)
+			c.SendScreenshot(payload.RequestID, "", 0, 0, err.Error())
 			return
 		}
 
@@ -266,7 +267,7 @@ func (c *Client) handleRequestScreenshot(msg *Message) {
 		base64Image := base64.StdEncoding.EncodeToString(imageData)
 
 		// 发送截图
-		c.SendScreenshot(payload.RequestID, base64Image, width, height)
+		c.SendScreenshot(payload.RequestID, base64Image, width, height, "")
 
 		log.Printf("[Client] 截图已发送: %dx%d, 大小: %d bytes",
 			width, height, len(imageData))

@@ -149,6 +149,7 @@ type ScreenshotPayload struct {
 	Base64Image string `json:"base64_image"`
 	Width       int    `json:"width"`
 	Height      int    `json:"height"`
+	Error       string `json:"error,omitempty"`
 }
 
 // ==================== Server -> Client 消息负载 ====================
