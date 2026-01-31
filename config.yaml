@@ -1,0 +1,27 @@
+# MaaEnd Client 配置文件
+
+server:
+  # 云端 WebSocket 地址
+  ws_url: "ws://localhost:15618/ws/maaend"
+  # 连接超时
+  connect_timeout: 10s
+  # 心跳间隔
+  heartbeat_interval: 30s
+  # 重连最大延迟
+  reconnect_max_delay: 30s
+
+maaend:
+  # MaaEnd 安装目录（为空则自动检测）
+  path: ""
+
+device:
+  # 设备名称（为空则使用主机名）
+  name: ""
+  # 设备令牌（首次绑定后自动保存）
+  token: ""
+
+logging:
+  # 日志级别: debug, info, warn, error
+  level: "info"
+  # 日志文件（为空则输出到控制台）
+  file: ""
