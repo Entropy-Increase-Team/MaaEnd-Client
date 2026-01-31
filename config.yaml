@@ -1,7 +1,7 @@
 # MaaEnd Client 配置文件
 
 # 客户端版本号
-version: "v0.1.0"
+version: "0.2.0"
 
 server:
   # 云端 WebSocket 地址

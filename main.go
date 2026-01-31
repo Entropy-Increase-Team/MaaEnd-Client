@@ -28,6 +28,10 @@ var (
 func main() {
 	flag.Parse()
 
+	if err := ensureAdmin(); err != nil {
+		log.Fatalf("需要管理员权限启动: %v", err)
+	}
+
 	// 设置日志格式
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	if *debugMode {

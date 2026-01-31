@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,13 +49,14 @@ type LoggingConfig struct {
 }
 
 var globalConfig *Config
+var configFilePath string
 
 // Load 加载配置
 func Load(configPath string) (*Config, error) {
 	v := viper.New()
 
 	// 设置默认值
-	v.SetDefault("version", "v0.1.0")
+	v.SetDefault("version", "0.2.0")
 	v.SetDefault("server.ws_url", "ws://localhost:15618/ws/maaend")
 	v.SetDefault("server.connect_timeout", "10s")
 	v.SetDefault("server.heartbeat_interval", "30s")
@@ -67,19 +69,12 @@ func Load(configPath string) (*Config, error) {
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.file", "")
 
-	if configPath != "" {
-		v.SetConfigFile(configPath)
-	} else {
-		// 默认配置文件位置
-		v.SetConfigName("config")
-		v.SetConfigType("yaml")
-		v.AddConfigPath(".")
-		v.AddConfigPath("./config")
-	}
+	configFilePath = resolveConfigPath(configPath)
+	v.SetConfigFile(configFilePath)
 
 	// 读取配置文件
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("读取配置文件失败: %w", err)
 		}
 		// 配置文件不存在，使用默认值
@@ -92,7 +87,7 @@ func Load(configPath string) (*Config, error) {
 
 	// 确保版本号有值
 	if cfg.Version == "" {
-		cfg.Version = "v0.1.0"
+		cfg.Version = "0.2.0"
 	}
 
 	// 自动检测 MaaEnd 路径
@@ -135,6 +130,14 @@ func SaveToken(token string) error {
 func SaveConfig() error {
 	if globalConfig == nil {
 		return fmt.Errorf("配置未加载")
+	}
+
+	path := getConfigFilePath()
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
 	}
 
 	configContent := fmt.Sprintf(`# MaaEnd Client 配置文件
@@ -186,13 +189,13 @@ logging:
 		globalConfig.Logging.File,
 	)
 
-	return os.WriteFile("config.yaml", []byte(configContent), 0644)
+	return os.WriteFile(path, []byte(configContent), 0644)
 }
 
 // EnsureConfigFormat 检查并修复配置文件格式
 func EnsureConfigFormat() error {
 	// 检查配置文件是否存在
-	configFile := "config.yaml"
+	configFile := getConfigFilePath()
 	content, err := os.ReadFile(configFile)
 	if err != nil {
 		// 文件不存在，创建新的
@@ -206,6 +209,36 @@ func EnsureConfigFormat() error {
 	}
 
 	return nil
+}
+
+func resolveConfigPath(configPath string) string {
+	if configPath != "" {
+		if abs, err := filepath.Abs(configPath); err == nil {
+			return abs
+		}
+		return configPath
+	}
+
+	defaultPath := defaultConfigPath()
+	if abs, err := filepath.Abs(defaultPath); err == nil {
+		return abs
+	}
+	return defaultPath
+}
+
+func defaultConfigPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "config.yaml"
+	}
+	return filepath.Join(filepath.Dir(exe), "config.yaml")
+}
+
+func getConfigFilePath() string {
+	if configFilePath != "" {
+		return configFilePath
+	}
+	return defaultConfigPath()
 }
 
 // detectMaaEndPath 自动检测 MaaEnd 安装路径
