@@ -63,6 +63,7 @@ type MaaWrapperInterface interface {
 	StopTask() error
 	TakeScreenshot() ([]byte, int, int, error)
 	ClearEventChannels() // 清除事件通道引用，防止关闭后写入导致 panic
+	GetVersion() string  // 获取 MaaEnd 版本
 }
 
 // NewClient 创建客户端
@@ -296,8 +297,25 @@ func (c *Client) SendMessage(msgType string, payload interface{}) error {
 // sendAuth 发送认证消息
 func (c *Client) sendAuth() {
 	log.Printf("[Client] 发送认证请求...")
+
+	// 获取 MaaEnd 版本
+	maaEndVersion := "unknown"
+	if c.maaWrapper != nil {
+		maaEndVersion = c.maaWrapper.GetVersion()
+	}
+
+	// 获取 Client 版本
+	clientVersion := c.config.Version
+	if clientVersion == "" {
+		clientVersion = "unknown"
+	}
+
+	log.Printf("[Client] 版本信息: MaaEnd=%s, Client=%s", maaEndVersion, clientVersion)
+
 	c.SendMessage(MsgTypeAuth, &AuthPayload{
-		DeviceToken: c.deviceToken,
+		DeviceToken:   c.deviceToken,
+		MaaEndVersion: maaEndVersion,
+		ClientVersion: clientVersion,
 	})
 }
 
@@ -306,13 +324,24 @@ func (c *Client) SendRegister(bindCode string) {
 	log.Printf("[Client] 发送注册请求，绑定码: %s", bindCode)
 
 	// 获取 MaaEnd 版本
-	version := "unknown"
-	// TODO: 从 interface.json 获取版本
+	maaEndVersion := "unknown"
+	if c.maaWrapper != nil {
+		maaEndVersion = c.maaWrapper.GetVersion()
+	}
+
+	// 获取 Client 版本
+	clientVersion := c.config.Version
+	if clientVersion == "" {
+		clientVersion = "unknown"
+	}
+
+	log.Printf("[Client] 版本信息: MaaEnd=%s, Client=%s", maaEndVersion, clientVersion)
 
 	c.SendMessage(MsgTypeRegister, &RegisterPayload{
 		BindCode:      bindCode,
 		DeviceName:    c.config.Device.Name,
-		MaaEndVersion: version,
+		MaaEndVersion: maaEndVersion,
+		ClientVersion: clientVersion,
 		MaaEndPath:    c.config.MaaEnd.Path,
 		OSInfo:        config.GetOSInfo(),
 	})

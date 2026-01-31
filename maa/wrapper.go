@@ -502,6 +502,17 @@ func (w *Wrapper) GetProjectInterface() *core.ProjectInterface {
 	return w.pi
 }
 
+// GetVersion 获取 MaaEnd 版本
+func (w *Wrapper) GetVersion() string {
+	if w.pi == nil {
+		return "unknown"
+	}
+	if w.pi.Version == "" {
+		return "unknown"
+	}
+	return w.pi.Version
+}
+
 // matchWindow 使用正则表达式匹配窗口
 func matchWindow(win *maafw.DesktopWindow, classRegex, windowRegex string) bool {
 	// 匹配 class 名称

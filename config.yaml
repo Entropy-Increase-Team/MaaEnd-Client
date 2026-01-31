@@ -1,5 +1,8 @@
 # MaaEnd Client 配置文件
 
+# 客户端版本号
+version: "v0.1.0"
+
 server:
   # 云端 WebSocket 地址
   ws_url: "ws://localhost:15618/ws/maaend"

@@ -71,14 +71,17 @@ func (m *Message) ParsePayload(v interface{}) error {
 type RegisterPayload struct {
 	BindCode      string `json:"bind_code"`
 	DeviceName    string `json:"device_name"`
-	MaaEndVersion string `json:"maaend_version"`
+	MaaEndVersion string `json:"maaend_version"` // MaaEnd 版本（来自 interface.json）
+	ClientVersion string `json:"client_version"` // Client 版本（来自配置文件）
 	MaaEndPath    string `json:"maaend_path"`
 	OSInfo        string `json:"os_info"`
 }
 
 // AuthPayload 设备认证负载
 type AuthPayload struct {
-	DeviceToken string `json:"device_token"`
+	DeviceToken   string `json:"device_token"`
+	MaaEndVersion string `json:"maaend_version,omitempty"` // MaaEnd 版本
+	ClientVersion string `json:"client_version,omitempty"` // Client 版本
 }
 
 // CapabilitiesPayload 设备能力上报负载

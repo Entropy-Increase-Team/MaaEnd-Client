@@ -13,6 +13,7 @@ import (
 
 // Config 全局配置
 type Config struct {
+	Version string        `mapstructure:"version"` // 客户端版本号
 	Server  ServerConfig  `mapstructure:"server"`
 	MaaEnd  MaaEndConfig  `mapstructure:"maaend"`
 	Device  DeviceConfig  `mapstructure:"device"`
@@ -53,6 +54,7 @@ func Load(configPath string) (*Config, error) {
 	v := viper.New()
 
 	// 设置默认值
+	v.SetDefault("version", "v0.1.0")
 	v.SetDefault("server.ws_url", "ws://localhost:15618/ws/maaend")
 	v.SetDefault("server.connect_timeout", "10s")
 	v.SetDefault("server.heartbeat_interval", "30s")
@@ -88,6 +90,11 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
 
+	// 确保版本号有值
+	if cfg.Version == "" {
+		cfg.Version = "v0.1.0"
+	}
+
 	// 自动检测 MaaEnd 路径
 	if cfg.MaaEnd.Path == "" {
 		cfg.MaaEnd.Path = detectMaaEndPath()
@@ -120,19 +127,85 @@ func SaveToken(token string) error {
 
 	globalConfig.Device.Token = token
 
-	v := viper.New()
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
+	// 使用模板保存配置，保持格式整洁
+	return SaveConfig()
+}
 
-	// 读取现有配置
-	v.ReadInConfig()
+// SaveConfig 保存完整配置到文件
+func SaveConfig() error {
+	if globalConfig == nil {
+		return fmt.Errorf("配置未加载")
+	}
 
-	// 更新 token
-	v.Set("device.token", token)
+	configContent := fmt.Sprintf(`# MaaEnd Client 配置文件
 
-	// 写入文件
-	return v.WriteConfig()
+# 客户端版本号
+version: "%s"
+
+server:
+  # 云端 WebSocket 地址
+  ws_url: "%s"
+  # 连接超时
+  connect_timeout: %s
+  # 心跳间隔
+  heartbeat_interval: %s
+  # 重连最大延迟
+  reconnect_max_delay: %s
+
+maaend:
+  # MaaEnd 安装目录（为空则自动检测）
+  path: "%s"
+  # 覆盖 Win32 窗口类名（正则，留空不覆盖）
+  win32_class_regex: "%s"
+  # 覆盖 Win32 窗口标题（正则，留空不覆盖）
+  win32_window_regex: "%s"
+
+device:
+  # 设备名称（为空则使用主机名）
+  name: "%s"
+  # 设备令牌（首次绑定后自动保存）
+  token: "%s"
+
+logging:
+  # 日志级别: debug, info, warn, error
+  level: "%s"
+  # 日志文件（为空则输出到控制台）
+  file: "%s"
+`,
+		globalConfig.Version,
+		globalConfig.Server.WsURL,
+		globalConfig.Server.ConnectTimeout,
+		globalConfig.Server.HeartbeatInterval,
+		globalConfig.Server.ReconnectMaxDelay,
+		globalConfig.MaaEnd.Path,
+		globalConfig.MaaEnd.Win32ClassRegex,
+		globalConfig.MaaEnd.Win32WindowRegex,
+		globalConfig.Device.Name,
+		globalConfig.Device.Token,
+		globalConfig.Logging.Level,
+		globalConfig.Logging.File,
+	)
+
+	return os.WriteFile("config.yaml", []byte(configContent), 0644)
+}
+
+// EnsureConfigFormat 检查并修复配置文件格式
+func EnsureConfigFormat() error {
+	// 检查配置文件是否存在
+	configFile := "config.yaml"
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		// 文件不存在，创建新的
+		return SaveConfig()
+	}
+
+	// 检查文件是否以注释开头（正确格式）
+	if !strings.HasPrefix(string(content), "# MaaEnd Client") {
+		// 格式被破坏，重新保存
+		return SaveConfig()
+	}
+
+	return nil
 }
 
 // detectMaaEndPath 自动检测 MaaEnd 安装路径

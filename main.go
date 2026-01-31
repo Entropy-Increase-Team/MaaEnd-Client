@@ -53,6 +53,11 @@ func main() {
 		cfg.Server.WsURL = *serverURL
 	}
 
+	// 确保配置文件格式正确（修复被 viper 破坏的格式）
+	if err := config.EnsureConfigFormat(); err != nil {
+		log.Printf("警告: 无法修复配置文件格式: %v", err)
+	}
+
 	// 检查 MaaEnd 路径
 	if cfg.MaaEnd.Path == "" {
 		log.Fatal("未找到 MaaEnd 安装目录，请使用 -maaend 参数指定")
@@ -192,4 +197,9 @@ func (a *MaaWrapperAdapter) TakeScreenshot() ([]byte, int, int, error) {
 // ClearEventChannels 清除事件通道引用
 func (a *MaaWrapperAdapter) ClearEventChannels() {
 	a.wrapper.ClearEventChannels()
+}
+
+// GetVersion 获取 MaaEnd 版本
+func (a *MaaWrapperAdapter) GetVersion() string {
+	return a.wrapper.GetVersion()
 }
