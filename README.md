@@ -93,11 +93,11 @@ MaaEnd Client 是 MaaEnd 终末地小助手的远程控制客户端，允许用�
 # MaaEnd Client 配置文件
 
 # 客户端版本号
-version: "0.2.1"
+version: "0.2.2"
 
 server:
   # 云端 WebSocket 地址
-  ws_url: "ws://localhost:15618/ws/maaend"
+  ws_url: "wss://end-api.shallow.ink/ws/maaend"
   # 连接超时
   connect_timeout: 10s
   # 心跳间隔
