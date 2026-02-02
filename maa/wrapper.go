@@ -187,6 +187,10 @@ func (w *Wrapper) ConnectController(name string) error {
 	return nil
 }
 
+// ScreenshotTargetLongSide MaaEnd 资源基于 1280x720 设计，长边 1280
+// MaaFramework 会自动将截图缩放到此分辨率，保证 ROI 坐标正确匹配
+const ScreenshotTargetLongSide int32 = 1280
+
 // createWin32Controller 创建 Win32 控制器
 func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.Controller, error) {
 	if config.Win32 == nil {
@@ -239,6 +243,17 @@ func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.C
 		keyboardMethod,
 	)
 
+	if ctrl != nil {
+		// 设置截图目标分辨率 - MaaEnd 资源基于 1280x720 设计
+		// 使用长边 1280，MaaFramework 会按原始宽高比自动计算短边
+		// 这确保了 ROI 坐标在 X 轴上不会超出范围
+		if ok := ctrl.SetScreenshotTargetLongSide(ScreenshotTargetLongSide); ok {
+			log.Printf("[Maa] 已设置截图目标长边: %d", ScreenshotTargetLongSide)
+		} else {
+			log.Printf("[Maa] 警告: 设置截图目标长边失败")
+		}
+	}
+
 	return ctrl, nil
 }
 
@@ -261,6 +276,16 @@ func (w *Wrapper) createAdbController(_ *core.ControllerConfig) (*maafw.Controll
 		device.Config,
 		"",
 	)
+
+	if ctrl != nil {
+		// 设置截图目标分辨率 - MaaEnd 资源基于 1280x720 设计
+		// 使用长边 1280，MaaFramework 会按原始宽高比自动计算短边
+		if ok := ctrl.SetScreenshotTargetLongSide(ScreenshotTargetLongSide); ok {
+			log.Printf("[Maa] 已设置截图目标长边: %d", ScreenshotTargetLongSide)
+		} else {
+			log.Printf("[Maa] 警告: 设置截图目标长边失败")
+		}
+	}
 
 	return ctrl, nil
 }

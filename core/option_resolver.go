@@ -61,6 +61,9 @@ func (r *OptionResolver) resolveOption(name string, opt *OptionConfig, userValue
 	switch opt.Type {
 	case "select":
 		return r.resolveSelectOption(name, opt, userValue, allUserOptions)
+	case "switch":
+		// switch 类型与 select 逻辑相同，只是通常只有 Yes/No 两个选项
+		return r.resolveSelectOption(name, opt, userValue, allUserOptions)
 	case "checkbox":
 		return r.resolveCheckboxOption(name, opt, userValue, allUserOptions)
 	case "input":
@@ -70,16 +73,25 @@ func (r *OptionResolver) resolveOption(name string, opt *OptionConfig, userValue
 	}
 }
 
-// resolveSelectOption 解析选择类型选项
+// resolveSelectOption 解析选择类型选项（也用于 switch 类型）
 func (r *OptionResolver) resolveSelectOption(name string, opt *OptionConfig, userValue interface{}, allUserOptions map[string]interface{}) (map[string]interface{}, error) {
 	override := make(map[string]interface{})
 
 	// 获取选中的 case
+	// 优先级：用户选择 > DefaultCase > Default > 第一个 case
 	selectedCase := opt.DefaultCase
+	if selectedCase == "" && opt.Default != "" {
+		selectedCase = opt.Default
+	}
 	if userValue != nil {
 		if strVal, ok := userValue.(string); ok {
 			selectedCase = strVal
 		}
+	}
+
+	// 如果仍然为空，使用第一个 case 作为默认
+	if selectedCase == "" && len(opt.Cases) > 0 {
+		selectedCase = opt.Cases[0].Name
 	}
 
 	// 查找对应的 case
@@ -92,6 +104,10 @@ func (r *OptionResolver) resolveSelectOption(name string, opt *OptionConfig, use
 	}
 
 	if caseConfig == nil {
+		// 如果没有找到且有 cases，返回空 override 而非错误
+		if len(opt.Cases) == 0 {
+			return override, nil
+		}
 		return nil, fmt.Errorf("选项 %s 的 case %s 不存在", name, selectedCase)
 	}
 

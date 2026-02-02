@@ -25,6 +25,7 @@ type ProjectInterface struct {
 	Agent            AgentConfig              `json:"agent"`
 	Tasks            []TaskConfig             `json:"task"`
 	Options          map[string]*OptionConfig `json:"option"`
+	Import           []string                 `json:"import"` // 外部任务文件路径列表
 
 	// 解析后的国际化文本
 	i18nTexts map[string]map[string]string // lang -> key -> value
@@ -67,6 +68,7 @@ type TaskConfig struct {
 	Label            string                 `json:"label"`
 	Entry            string                 `json:"entry"`
 	Description      string                 `json:"description"`
+	DefaultCheck     bool                   `json:"default_check,omitempty"` // 默认选中
 	Option           []string               `json:"option"`
 	Controller       []string               `json:"controller"`
 	Resource         []string               `json:"resource"`
@@ -141,6 +143,19 @@ func LoadInterface(maaEndPath string) (*ProjectInterface, error) {
 	pi.basePath = maaEndPath
 	pi.i18nTexts = make(map[string]map[string]string)
 
+	// 初始化 Options map（如果为空）
+	if pi.Options == nil {
+		pi.Options = make(map[string]*OptionConfig)
+	}
+
+	// 加载 import 引用的外部任务文件
+	for _, importPath := range pi.Import {
+		if err := pi.loadImportedFile(importPath); err != nil {
+			// import 加载失败记录警告但不中断
+			fmt.Printf("警告: 加载导入文件 %s 失败: %v\n", importPath, err)
+		}
+	}
+
 	// 加载国际化文件
 	for lang, path := range pi.Languages {
 		if err := pi.loadI18n(lang, path); err != nil {
@@ -150,6 +165,39 @@ func LoadInterface(maaEndPath string) (*ProjectInterface, error) {
 	}
 
 	return &pi, nil
+}
+
+// ImportedFile 外部导入文件的结构
+type ImportedFile struct {
+	Tasks   []TaskConfig             `json:"task"`
+	Options map[string]*OptionConfig `json:"option"`
+}
+
+// loadImportedFile 加载单个导入文件，合并 task 和 option
+func (pi *ProjectInterface) loadImportedFile(relativePath string) error {
+	fullPath := filepath.Join(pi.basePath, relativePath)
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("读取文件失败: %w", err)
+	}
+
+	var imported ImportedFile
+	if err := json.Unmarshal(data, &imported); err != nil {
+		return fmt.Errorf("解析文件失败: %w", err)
+	}
+
+	// 合并任务
+	pi.Tasks = append(pi.Tasks, imported.Tasks...)
+
+	// 合并选项
+	for name, opt := range imported.Options {
+		if opt != nil {
+			pi.Options[name] = opt
+		}
+	}
+
+	return nil
 }
 
 // loadI18n 加载国际化文件
