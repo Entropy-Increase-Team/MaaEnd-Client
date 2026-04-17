@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +12,11 @@ import (
 
 	"github.com/spf13/viper"
 )
+
+// CurrentVersion 是 MEC Client 当前程序版本号的单一真相来源。
+// 每次发版只改这一个常量，程序启动时会据此覆写配置文件中的 version 字段，
+// 避免用户的旧配置文件覆盖实际可执行程序的版本号。
+const CurrentVersion = "0.5.0"
 
 // Config 全局配置
 type Config struct {
@@ -56,7 +62,7 @@ func Load(configPath string) (*Config, error) {
 	v := viper.New()
 
 	// 设置默认值
-	v.SetDefault("version", "0.4.0")
+	v.SetDefault("version", CurrentVersion)
 	v.SetDefault("server.ws_url", "wss://end-api.shallow.ink/ws/maaend")
 	v.SetDefault("server.connect_timeout", "10s")
 	v.SetDefault("server.heartbeat_interval", "30s")
@@ -85,9 +91,15 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
 
-	// 确保版本号有值
-	if cfg.Version == "" {
-		cfg.Version = "0.4.0"
+	// 版本号由程序管理（单一真相来源），若与 CurrentVersion 不一致则覆写并回写磁盘。
+	// 这样升级可执行文件后，本地旧配置不会把版本号"倒回去"。
+	if cfg.Version != CurrentVersion {
+		if cfg.Version == "" {
+			log.Printf("[Config] 首次写入版本号: %s", CurrentVersion)
+		} else {
+			log.Printf("[Config] 版本号刷新: %s -> %s", cfg.Version, CurrentVersion)
+		}
+		cfg.Version = CurrentVersion
 	}
 
 	// 标准化路径（正斜杠，避免 YAML 转义问题）
@@ -200,7 +212,12 @@ logging:
 	return os.WriteFile(path, []byte(configContent), 0644)
 }
 
-// EnsureConfigFormat 检查并修复配置文件格式
+// EnsureConfigFormat 检查并修复配置文件格式。
+// 触发重写的条件：
+//  1. 文件不存在或读取失败；
+//  2. 文件头未按标准模板开头；
+//  3. Windows 下文件中含反斜杠（YAML 双引号里会当作转义序列）；
+//  4. 磁盘中的 version 字段与 CurrentVersion 不一致（程序版本管理权威）。
 func EnsureConfigFormat() error {
 	configFile := getConfigFilePath()
 	content, err := os.ReadFile(configFile)
@@ -210,10 +227,11 @@ func EnsureConfigFormat() error {
 
 	text := string(content)
 
-	// Rewrite if the format header is missing or if Windows backslashes
-	// would produce invalid YAML escape sequences.
 	needsRewrite := !strings.HasPrefix(text, "# MaaEnd Client")
 	if !needsRewrite && runtime.GOOS == "windows" && strings.Contains(text, "\\") {
+		needsRewrite = true
+	}
+	if !needsRewrite && !strings.Contains(text, fmt.Sprintf("version: %q", CurrentVersion)) {
 		needsRewrite = true
 	}
 

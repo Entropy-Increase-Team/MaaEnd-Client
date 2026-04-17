@@ -109,6 +109,7 @@ func main() {
 
 	log.Printf("正在初始化 MaaFramework...")
 	maaWrapper := maa.NewWrapper(cfg.MaaEnd.Path)
+	maaWrapper.SetClientVersion(cfg.Version)
 	if err := maaWrapper.Init(); err != nil {
 		fatal("初始化 MaaFramework 失败: %v\n可能原因:\n  1. MaaEnd 路径不正确\n  2. maafw 原生库与当前系统不兼容\n  3. 缺少 Visual C++ 运行库", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+	"time"
 
 	maafw "github.com/MaaXYZ/maa-framework-go/v3"
 	"github.com/MaaXYZ/maa-framework-go/v3/controller/win32"
@@ -20,8 +21,9 @@ import (
 
 // Wrapper MaaFramework 封装
 type Wrapper struct {
-	maaEndPath string
-	pi         *core.ProjectInterface
+	maaEndPath    string
+	pi            *core.ProjectInterface
+	clientVersion string // MEC 自身版本号（config.yaml 中读取）
 
 	controller *maafw.Controller
 	resource   *maafw.Resource
@@ -31,8 +33,9 @@ type Wrapper struct {
 	currentController string
 	currentResource   string
 
-	// Agent 服务（可能有多个）
+	// Agent 服务（可能有多个，每个对应一个 AgentClient）
 	agentServers []*AgentServer
+	agentClients []*maafw.AgentClient
 
 	// 事件处理
 	eventHandler *EventHandler
@@ -51,6 +54,14 @@ func NewWrapper(maaEndPath string) *Wrapper {
 		maaEndPath:   maaEndPath,
 		eventHandler: NewEventHandler(),
 	}
+}
+
+// SetClientVersion 设置 MEC 自身版本号，参与 PI_CLIENT_VERSION 环境变量。
+// 由 main / 外部在构造 Wrapper 之后调用。
+func (w *Wrapper) SetClientVersion(version string) {
+	w.mu.Lock()
+	w.clientVersion = version
+	w.mu.Unlock()
 }
 
 // Init 初始化 MaaFramework
@@ -187,9 +198,10 @@ func (w *Wrapper) ConnectController(name string) error {
 	return nil
 }
 
-// ScreenshotTargetLongSide MaaEnd 资源基于 1280x720 设计，长边 1280
-// MaaFramework 会自动将截图缩放到此分辨率，保证 ROI 坐标正确匹配
-const ScreenshotTargetLongSide int32 = 1280
+// DefaultScreenshotShortSide 当 interface.json 未声明 display_raw/long_side/short_side 时，
+// 按 MaaFW PI V2 协议 controller.display_short_side 的默认值 720 执行。
+// 对于 16:9 资源这等价于长边 1280。
+const DefaultScreenshotShortSide int32 = 720
 
 // createWin32Controller 创建 Win32 控制器
 func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.Controller, error) {
@@ -244,21 +256,14 @@ func (w *Wrapper) createWin32Controller(config *core.ControllerConfig) (*maafw.C
 	)
 
 	if ctrl != nil {
-		// 设置截图目标分辨率 - MaaEnd 资源基于 1280x720 设计
-		// 使用长边 1280，MaaFramework 会按原始宽高比自动计算短边
-		// 这确保了 ROI 坐标在 X 轴上不会超出范围
-		if ok := ctrl.SetScreenshotTargetLongSide(ScreenshotTargetLongSide); ok {
-			log.Printf("[Maa] 已设置截图目标长边: %d", ScreenshotTargetLongSide)
-		} else {
-			log.Printf("[Maa] 警告: 设置截图目标长边失败")
-		}
+		applyScreenshotResolution(ctrl, config)
 	}
 
 	return ctrl, nil
 }
 
 // createAdbController 创建 ADB 控制器
-func (w *Wrapper) createAdbController(_ *core.ControllerConfig) (*maafw.Controller, error) {
+func (w *Wrapper) createAdbController(config *core.ControllerConfig) (*maafw.Controller, error) {
 	// 查找设备
 	devices := maafw.FindAdbDevices()
 	if len(devices) == 0 {
@@ -278,16 +283,45 @@ func (w *Wrapper) createAdbController(_ *core.ControllerConfig) (*maafw.Controll
 	)
 
 	if ctrl != nil {
-		// 设置截图目标分辨率 - MaaEnd 资源基于 1280x720 设计
-		// 使用长边 1280，MaaFramework 会按原始宽高比自动计算短边
-		if ok := ctrl.SetScreenshotTargetLongSide(ScreenshotTargetLongSide); ok {
-			log.Printf("[Maa] 已设置截图目标长边: %d", ScreenshotTargetLongSide)
-		} else {
-			log.Printf("[Maa] 警告: 设置截图目标长边失败")
-		}
+		applyScreenshotResolution(ctrl, config)
 	}
 
 	return ctrl, nil
+}
+
+// applyScreenshotResolution 按 MaaFW PI V2 协议字段设置控制器截图分辨率。
+// 协议规定 display_raw / display_long_side / display_short_side 三者互斥，
+// 优先级：display_raw > display_long_side > display_short_side > 默认短边 720。
+func applyScreenshotResolution(ctrl *maafw.Controller, config *core.ControllerConfig) {
+	if ctrl == nil || config == nil {
+		return
+	}
+	switch {
+	case config.DisplayRaw:
+		if ok := ctrl.SetScreenshotUseRawSize(true); ok {
+			log.Printf("[Maa] 已启用原始分辨率截图 (display_raw=true)")
+		} else {
+			log.Printf("[Maa] 警告: SetScreenshotUseRawSize 失败")
+		}
+	case config.DisplayLongSide > 0:
+		if ok := ctrl.SetScreenshotTargetLongSide(config.DisplayLongSide); ok {
+			log.Printf("[Maa] 已设置截图目标长边: %d", config.DisplayLongSide)
+		} else {
+			log.Printf("[Maa] 警告: 设置截图目标长边失败 (%d)", config.DisplayLongSide)
+		}
+	case config.DisplayShortSide > 0:
+		if ok := ctrl.SetScreenshotTargetShortSide(config.DisplayShortSide); ok {
+			log.Printf("[Maa] 已设置截图目标短边: %d", config.DisplayShortSide)
+		} else {
+			log.Printf("[Maa] 警告: 设置截图目标短边失败 (%d)", config.DisplayShortSide)
+		}
+	default:
+		if ok := ctrl.SetScreenshotTargetShortSide(DefaultScreenshotShortSide); ok {
+			log.Printf("[Maa] 已按协议默认设置截图目标短边: %d", DefaultScreenshotShortSide)
+		} else {
+			log.Printf("[Maa] 警告: 设置协议默认截图短边失败 (%d)", DefaultScreenshotShortSide)
+		}
+	}
 }
 
 // LoadResource 加载资源
@@ -390,9 +424,11 @@ func (w *Wrapper) RunTask(job *client.Job, statusCh chan<- client.TaskStatusPayl
 		w.eventHandler.OnTaskerTask(status, detail)
 	})
 
-	// 启动所有 Agent（如果配置了）
-	if err := w.startAgents(); err != nil {
-		log.Printf("[Maa] 启动 Agent 失败: %v (继续执行)", err)
+	// 启动所有 Agent 并等待 AgentClient 连接成功。
+	// Agent 失败属于致命错误 —— CustomAction/Recognition 无法工作整个任务链会全部 Action is null。
+	if err := w.startAgents(job.Controller, job.Resource); err != nil {
+		w.stopAgents()
+		return fmt.Errorf("启动 Agent 失败: %w", err)
 	}
 
 	// 创建任务参数编译器
@@ -443,11 +479,8 @@ func (w *Wrapper) RunTask(job *client.Job, statusCh chan<- client.TaskStatusPayl
 		log.Printf("[Maa] 任务完成: %s", taskItem.Name)
 	}
 
-	// 停止所有 Agent（任务结束后清理）
-	for _, server := range w.agentServers {
-		server.Stop()
-	}
-	w.agentServers = nil
+	// 任务结束后清理 Agent（先 Disconnect 再 kill 子进程，避免 socket 残留）
+	w.stopAgents()
 
 	return taskErr
 }
@@ -496,11 +529,39 @@ func (w *Wrapper) TakeScreenshot() ([]byte, int, int, error) {
 	return buf.Bytes(), bounds.Dx(), bounds.Dy(), nil
 }
 
-// startAgents 启动所有配置的 Agent
-func (w *Wrapper) startAgents() error {
+// AgentConnectTimeout AgentClient.Connect 的阻塞超时，防止子进程启动失败时无限挂起
+const AgentConnectTimeout = 30 * time.Second
+
+// startAgents 按 MaaFW PI V2 + v2.5.0 规范启动所有 Agent：
+//  1. 为每个 agent 创建 AgentClient（identifier 由 interface.json 指定或由 MaaFW 自动生成）；
+//  2. BindResource 以便 AgentServer 注册的 custom_action/recognition 在 Pipeline 中被路由；
+//  3. 用解析后的 identifier 作为位置参数启动子进程，并注入 PI_* 环境变量；
+//  4. 阻塞 Connect（带超时）等待子进程 AgentServerStartUp 连上 socket。
+//
+// 必须在 Resource 已 BindResource 到 Tasker 之后调用（AgentClient 也需要同一 Resource）。
+func (w *Wrapper) startAgents(controllerName, resourceName string) error {
 	agents := w.pi.GetAgents()
 	if len(agents) == 0 {
 		return nil
+	}
+	if w.resource == nil {
+		return fmt.Errorf("启动 Agent 前必须先加载 Resource")
+	}
+
+	// 构造 PI_* 环境变量（所有 agent 共用同一份 Client 上下文）
+	envCtx := PIEnvContext{
+		InterfaceVersion: "v2.5.0",
+		ClientName:       "MEC",
+		ClientVersion:    w.clientVersion,
+		Language:         "zh_cn",
+		MaaFWVersion:     maafw.Version(),
+		ProjectVersion:   w.pi.Version,
+		ControllerName:   controllerName,
+		ResourceName:     resourceName,
+	}
+	env, err := BuildAgentEnv(w.pi, envCtx)
+	if err != nil {
+		return fmt.Errorf("构造 Agent 环境变量失败: %w", err)
 	}
 
 	for _, agentCfg := range agents {
@@ -513,25 +574,79 @@ func (w *Wrapper) startAgents() error {
 			agentExec = filepath.Join(w.pi.GetBasePath(), agentExec)
 		}
 
+		client := maafw.NewAgentClient(agentCfg.Identifier)
+		if client == nil {
+			return fmt.Errorf("创建 AgentClient 失败: %s", agentCfg.ChildExec)
+		}
+
+		identifier, ok := client.Identifier()
+		if !ok || identifier == "" {
+			client.Destroy()
+			return fmt.Errorf("获取 AgentClient identifier 失败: %s", agentCfg.ChildExec)
+		}
+
+		if !client.BindResource(w.resource) {
+			client.Destroy()
+			return fmt.Errorf("AgentClient.BindResource 失败: %s", agentCfg.ChildExec)
+		}
+
+		if !client.SetTimeout(AgentConnectTimeout) {
+			log.Printf("[Maa] 警告: AgentClient.SetTimeout(%s) 返回 false", AgentConnectTimeout)
+		}
+
 		server := NewAgentServer()
-		if err := server.Start(agentExec, agentCfg.ChildArgs, w.pi.GetBasePath()); err != nil {
+		if err := server.Start(agentExec, agentCfg.ChildArgs, identifier, w.pi.GetBasePath(), env); err != nil {
+			client.Destroy()
 			return fmt.Errorf("启动 Agent %s 失败: %w", agentCfg.ChildExec, err)
 		}
+
+		log.Printf("[Maa] 等待 AgentClient 连接: %s (identifier=%s)", agentCfg.ChildExec, identifier)
+		if !client.Connect() {
+			server.Stop()
+			client.Destroy()
+			return fmt.Errorf("AgentClient.Connect 失败: %s (identifier=%s)", agentCfg.ChildExec, identifier)
+		}
+		log.Printf("[Maa] AgentClient 已连接: %s", agentCfg.ChildExec)
+
+		w.agentClients = append(w.agentClients, client)
 		w.agentServers = append(w.agentServers, server)
 	}
 
 	return nil
 }
 
-// Cleanup 清理资源
+// stopAgents 关闭已启动的 AgentClient 与子进程；按启动的反向顺序清理。
+func (w *Wrapper) stopAgents() {
+	for i := len(w.agentClients) - 1; i >= 0; i-- {
+		c := w.agentClients[i]
+		if c == nil {
+			continue
+		}
+		if c.Connected() {
+			if !c.Disconnect() {
+				log.Printf("[Maa] 警告: AgentClient.Disconnect 返回 false")
+			}
+		}
+		c.Destroy()
+	}
+	w.agentClients = nil
+
+	for i := len(w.agentServers) - 1; i >= 0; i-- {
+		s := w.agentServers[i]
+		if s == nil {
+			continue
+		}
+		s.Stop()
+	}
+	w.agentServers = nil
+}
+
+// Cleanup 清理资源。按 AgentClient → AgentServer → Tasker → Resource → Controller 顺序释放。
 func (w *Wrapper) Cleanup() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	for _, server := range w.agentServers {
-		server.Stop()
-	}
-	w.agentServers = nil
+	w.stopAgents()
 
 	if w.tasker != nil {
 		w.tasker.Destroy()

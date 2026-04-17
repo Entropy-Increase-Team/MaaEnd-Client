@@ -114,6 +114,12 @@ type ControllerConfig struct {
 	AttachResourcePath []string         `json:"attach_resource_path,omitempty"`
 	Option             []string         `json:"option,omitempty"`
 	PermissionRequired bool             `json:"permission_required"`
+
+	// PI V2 协议截图分辨率字段（三者互斥；Client 应按 display_raw > long_side > short_side 顺序取值，
+	// 都未设置时按协议默认短边 720）
+	DisplayShortSide int32 `json:"display_short_side,omitempty"`
+	DisplayLongSide  int32 `json:"display_long_side,omitempty"`
+	DisplayRaw       bool  `json:"display_raw,omitempty"`
 }
 
 // AdbConfig ADB 控制器配置
@@ -151,6 +157,9 @@ type ResourceConfig struct {
 type AgentConfig struct {
 	ChildExec string   `json:"child_exec"`
 	ChildArgs []string `json:"child_args"`
+	// Identifier 可选，用于创建通信套接字标识符。留空时由 Client 自动生成。
+	// 参考 MaaFW PI V2 "agent.identifier" 字段。
+	Identifier string `json:"identifier,omitempty"`
 }
 
 // TaskConfig 任务配置

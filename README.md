@@ -92,8 +92,8 @@ MaaEnd Client 是 MaaEnd 终末地小助手的远程控制客户端，允许用�
 ```yaml
 # MaaEnd Client 配置文件
 
-# 客户端版本号
-version: "0.4.0"
+# 客户端版本号（由程序管理；每次启动会与可执行文件版本对齐，手动修改无效）
+version: "0.5.0"
 
 server:
   # 云端 WebSocket 地址
@@ -130,7 +130,7 @@ logging:
 
 | 配置项 | 说明 |
 |--------|------|
-| `version` | 客户端版本号，用于版本追踪 |
+| `version` | 客户端版本号；由程序内嵌的 `config.CurrentVersion` 管理，每次启动会自动与可执行文件版本对齐并覆盖本地旧值，手动修改无效 |
 | `server.ws_url` | 云端服务器 WebSocket 地址 |
 | `server.connect_timeout` | WebSocket 连接超时时间 |
 | `server.heartbeat_interval` | 心跳发送间隔 |

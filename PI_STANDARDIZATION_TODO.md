@@ -153,5 +153,24 @@
 - [x] 已完成 P2（规则引擎激活与合并）
 - [x] 已完成 P3（执行链路标准化）
 - [x] 已完成 P4（能力上报与前后端一致性）
+- [x] 已完成 P6.1 PI v2.5.0 Agent 子进程集成（AgentClient + PI_* 环境变量）
+- [x] 已完成 P6.2 PI V2 `controller.display_*` 字段协议驱动
 - [ ] 进行中：P5（测试体系与发布文档）
+- [ ] 待办 P6.3：PI v2.4.0 顶层 `group[]` 声明 + `task.group` 字段（capability 上报与前端分组展示）
+- [ ] 待办 P6.4：`focus` 回调机制（`display: log/toast/notification/dialog/modal` 渠道 + 占位符替换）
+- [ ] 待办 P6.5：节点级事件（`Node.PipelineNode.*` / `Node.Recognition.*` / `Node.Action.*`）日志转发
+- [ ] 待办 P6.6：Win32 新输入方式显式映射（`SendMessageWithWindowPos` / `PostMessageWithWindowPos`）+ `Background` 组合宏
+
+## 八、v0.5.0 改动摘要（2026-04-17）
+
+| 改动点 | 协议依据 | 文件 |
+|---|---|---|
+| `AgentConfig.Identifier` 字段 | PI V2 `agent.identifier`（可选，用于 socket 标识符） | `core/interface_parser.go` |
+| `ControllerConfig.Display{Raw,LongSide,ShortSide}` | PI V2 `controller.display_*` 三者互斥 | `core/interface_parser.go` |
+| `ResolveControllerForEnv` / `ResolveResourceForEnv` | PI v2.5.0 `PI_CONTROLLER` / `PI_RESOURCE` 要求 i18n 已解析的紧凑 JSON | `core/i18n_resolver.go` |
+| `BuildAgentEnv` | PI v2.5.0「Agent 子进程环境变量」 | `maa/agent_env.go` |
+| `AgentServer.Start(..., identifier, env)` | MaaFW agent-server 示例：`os.Args[1]` 为 identifier | `maa/agent.go` |
+| `Wrapper.startAgents` 走 `AgentClient` 完整生命周期 | maa-framework-go `agent_client.go` 标准流程 | `maa/wrapper.go` |
+| `applyScreenshotResolution` 替换硬编码 1280 | PI V2 `display_*` 协议字段 | `maa/wrapper.go` |
+| `CurrentVersion` 单一真相来源 + 启动时覆写配置文件 | Client 版本号上报准确性 | `config/config.go` |
 
