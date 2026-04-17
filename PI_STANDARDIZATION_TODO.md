@@ -161,7 +161,11 @@
 - [ ] 待办 P6.5：节点级事件（`Node.PipelineNode.*` / `Node.Recognition.*` / `Node.Action.*`）日志转发
 - [ ] 待办 P6.6：Win32 新输入方式显式映射（`SendMessageWithWindowPos` / `PostMessageWithWindowPos`）+ `Background` 组合宏
 
-## 八、v0.5.0 改动摘要（2026-04-17）
+## 八、v0.5.x 改动摘要（2026-04-17）
+
+v0.5.1：精简仓库测试文件（不含业务逻辑改动）。
+
+v0.5.0：
 
 | 改动点 | 协议依据 | 文件 |
 |---|---|---|

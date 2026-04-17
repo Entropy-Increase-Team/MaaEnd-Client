@@ -16,7 +16,7 @@ import (
 // CurrentVersion 是 MEC Client 当前程序版本号的单一真相来源。
 // 每次发版只改这一个常量，程序启动时会据此覆写配置文件中的 version 字段，
 // 避免用户的旧配置文件覆盖实际可执行程序的版本号。
-const CurrentVersion = "0.5.0"
+const CurrentVersion = "0.5.1"
 
 // Config 全局配置
 type Config struct {
